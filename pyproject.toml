@@ -1,0 +1,46 @@
+[project]
+name = "quadruped-gait-simulator"
+version = "0.1.0"
+description = "Trot and walk gait generation for a quadruped with support polygon and stability margin analysis."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Emre Yilmaz" }]
+keywords = ["robotics", "quadruped", "gait", "legged-locomotion", "python"]
+dependencies = ["numpy>=2.0", "scipy>=1.14", "matplotlib>=3.9"]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.8", "mypy>=1.13"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "ruff>=0.8", "mypy>=1.13"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quadruped_gait"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: excluded from the default run"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/quadruped_gait"]
+
+# SciPy ships no type information, so its Qhull wrapper is opaque to mypy. The only
+# import is scipy.spatial.ConvexHull in the stability module, whose result is
+# immediately converted back to a typed NumPy array.
+[[tool.mypy.overrides]]
+module = ["scipy.*"]
+ignore_missing_imports = true
