@@ -14,6 +14,7 @@ EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "examples"
 
 # Every example, with the arguments that shrink it to a fast integration run.
 EXAMPLE_ARGUMENTS: dict[str, tuple[str, ...]] = {
+    "docs_figures": ("--cycles", "1", "--samples-per-cycle", "12", "--no-figures"),
     "gait_comparison": ("--cycles", "1", "--samples-per-cycle", "24", "--no-figures"),
     "gait_diagram": ("--cycles", "1", "--samples-per-cycle", "24", "--no-figures"),
     "leg_kinematics": ("--samples", "50"),
@@ -74,4 +75,22 @@ def test_example_writes_figures(tmp_path: Path, capsys: pytest.CaptureFixture[st
         "walk_foot_paths.png",
         "walk_stability.png",
         "walk_support_polygons.png",
+    ]
+
+
+def test_published_figure_script_writes_the_documented_set(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The regeneration command writes exactly the three figures the README embeds."""
+    module = _load("docs_figures")
+    arguments = (
+        "--cycles", "1", "--samples-per-cycle", "12", "--dpi", "50",
+        "--figure-dir", str(tmp_path),
+    )
+    assert module.main(arguments) == 0
+    capsys.readouterr()
+    assert sorted(path.name for path in tmp_path.glob("*.png")) == [
+        "critical_support_polygon.png",
+        "duty_factor_sweep.png",
+        "gait_diagrams.png",
     ]

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from quadruped_gait.pipeline.presets import (
     DUTY_SWEEP_FACTORS,
+    DUTY_SWEEP_FIGURE_FACTORS,
     REFERENCE_SWAY_AMPLITUDE,
     REFERENCE_VELOCITY,
     REFERENCE_WALK_DUTY_FACTOR,
+    STATIC_STABILITY_THRESHOLD,
     reference_gaits,
     reference_walk,
+    threshold_walk,
 )
 from quadruped_gait.pipeline.simulator import (
     BodyCommand,
@@ -21,9 +24,11 @@ from quadruped_gait.pipeline.sweep import DutySweepRow, duty_factor_sweep, run_g
 
 __all__ = [
     "DUTY_SWEEP_FACTORS",
+    "DUTY_SWEEP_FIGURE_FACTORS",
     "REFERENCE_SWAY_AMPLITUDE",
     "REFERENCE_VELOCITY",
     "REFERENCE_WALK_DUTY_FACTOR",
+    "STATIC_STABILITY_THRESHOLD",
     "BodyCommand",
     "DutySweepRow",
     "SimulationConfig",
@@ -34,4 +39,5 @@ __all__ = [
     "reference_walk",
     "run_gaits",
     "simulate",
+    "threshold_walk",
 ]

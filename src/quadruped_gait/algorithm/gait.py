@@ -19,6 +19,7 @@ lateral legs, and bound pairs the fore legs against the hind legs.
 
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -35,9 +36,11 @@ __all__ = [
     "GAIT_NAMES",
     "GaitParameters",
     "contact_schedule",
+    "exact_duty_factors",
     "gait",
     "leg_phases",
-    "realised_duty_factors",
+    "sampled_duty_factors",
+    "stance_count_extrema",
 ]
 
 # Phases that land within this distance of a full cycle are snapped to zero so that
@@ -53,6 +56,21 @@ def _wrap_phase(value: float) -> float:
     if wrapped >= 1.0 - _PHASE_EPSILON:
         return 0.0
     return wrapped
+
+
+def _stance_measure_to(cycles: float, duty_factor: float) -> float:
+    """Return the measure of ``{u in [0, x] : frac(u) < beta}``, in cycles.
+
+    This is the antiderivative of the stance indicator. Writing ``k`` for
+    ``floor(x)``, the interval ``[0, x]`` contains ``k`` whole cycles, each
+    contributing ``beta``, followed by a partial cycle of length ``x - k`` that
+    contributes ``min(x - k, beta)``. The same expression is correct for negative
+    ``x``, where ``k`` is negative and the result is the negated measure of
+    ``[x, 0]``, which is what makes a difference of two evaluations valid over any
+    interval.
+    """
+    whole = math.floor(cycles)
+    return whole * duty_factor + min(cycles - whole, duty_factor)
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +181,70 @@ class GaitParameters:
             liftoff -= self.period
         return liftoff
 
+    def stance_measure(self, leg_id: LegId, start: float, end: float) -> float:
+        """Return the time ``leg_id`` spends loaded within ``[start, end]``, in seconds.
+
+        The contact schedule is a known periodic step function of time, so the
+        measure of the stance set is an antiderivative evaluated at the two ends.
+        The result carries no discretisation error at all, unlike a stance fraction
+        obtained by counting samples, which can be wrong by up to one sampling
+        interval.
+
+        Raises:
+            ValueError: If ``end`` precedes ``start``.
+        """
+        if end < start:
+            raise ValueError(f"end must not precede start, got start={start}, end={end}")
+        offset = self.phase_offsets[int(leg_id)]
+        lower = start / self.period - offset
+        upper = end / self.period - offset
+        cycles = _stance_measure_to(upper, self.duty_factor) - _stance_measure_to(
+            lower, self.duty_factor
+        )
+        return cycles * self.period
+
+    def stance_fraction(self, leg_id: LegId, start: float, end: float) -> float:
+        """Return the fraction of ``[start, end]`` that ``leg_id`` spends loaded.
+
+        Over a whole number of gait cycles this is the duty factor exactly. Over a
+        partial window it is the exact stance fraction of that window, which is not
+        in general the duty factor.
+
+        Raises:
+            ValueError: If the window is empty.
+        """
+        if end <= start:
+            raise ValueError(f"the window must be non-empty, got start={start}, end={end}")
+        return self.stance_measure(leg_id, start, end) / (end - start)
+
+    def stance_intervals(
+        self, leg_id: LegId, start: float, end: float
+    ) -> tuple[tuple[float, float], ...]:
+        """Return the loaded intervals of ``leg_id``, clipped to ``[start, end]``.
+
+        Touchdown of leg ``i`` happens at ``t = (k + phi_i) T`` for every integer
+        ``k``, and the stance that begins there ends one stance duration later. The
+        intervals are therefore enumerated directly rather than recovered by
+        scanning a sampled contact array, so an interval edge lands on the phase
+        boundary itself.
+
+        Raises:
+            ValueError: If ``end`` precedes ``start``.
+        """
+        if end < start:
+            raise ValueError(f"end must not precede start, got start={start}, end={end}")
+        offset = self.phase_offsets[int(leg_id)]
+        first = math.floor(start / self.period - offset - self.duty_factor)
+        last = math.ceil(end / self.period - offset)
+        intervals: list[tuple[float, float]] = []
+        for cycle in range(first, last + 1):
+            touchdown = (cycle + offset) * self.period
+            lower = max(touchdown, start)
+            upper = min(touchdown + self.stance_duration, end)
+            if upper > lower:
+                intervals.append((lower, upper))
+        return tuple(intervals)
+
 
 _LIBRARY: dict[str, GaitParameters] = {
     # Lateral sequence walk: touchdown order HL, FL, HR, FR at quarter cycle spacing,
@@ -245,11 +327,52 @@ def contact_schedule(parameters: GaitParameters, times: NDArray[np.float64]) -> 
     return np.asarray(phases < parameters.duty_factor, dtype=np.bool_)
 
 
-def realised_duty_factors(schedule: NDArray[np.bool_]) -> NDArray[np.float64]:
-    """Return the measured stance fraction of each leg from a contact schedule."""
+def sampled_duty_factors(schedule: NDArray[np.bool_]) -> NDArray[np.float64]:
+    """Return the stance fraction of each leg counted from a sampled schedule.
+
+    This is the fraction of sampled instants at which each leg was loaded, so it
+    carries a discretisation error of up to one sampling interval. Use
+    :func:`exact_duty_factors` for the value itself; this function exists as an
+    independent measurement of what a trace actually recorded.
+    """
     array = np.asarray(schedule, dtype=np.bool_)
     if array.ndim != 2 or array.shape[1] != LEG_COUNT:
         raise ValueError(f"schedule must have shape (n, {LEG_COUNT}), got {array.shape}")
     if array.shape[0] == 0:
         raise ValueError("schedule must contain at least one sample")
     return np.asarray(array.mean(axis=0), dtype=np.float64)
+
+
+def exact_duty_factors(
+    parameters: GaitParameters, start: float, end: float
+) -> NDArray[np.float64]:
+    """Return the exact stance fraction of every leg over ``[start, end]``, shape ``(4,)``.
+
+    The values come from the closed form of the schedule, so over a whole number of
+    cycles every entry equals the commanded duty factor to floating point rounding.
+    """
+    return np.array(
+        [parameters.stance_fraction(leg_id, start, end) for leg_id in LegId],
+        dtype=np.float64,
+    )
+
+
+def stance_count_extrema(parameters: GaitParameters) -> tuple[int, int]:
+    """Return the smallest and largest number of loaded feet over one gait cycle.
+
+    The number of loaded feet is piecewise constant and changes only at a touchdown
+    or a lift off, so evaluating it once inside each interval between consecutive
+    events gives the exact range. The distinction this makes visible is the one the
+    quasi-static criterion turns on: a walk never drops below three loaded feet,
+    a trot and a pace hold exactly two, and a bound reaches zero.
+    """
+    events = {0.0, 1.0}
+    for offset in parameters.phase_offsets:
+        events.add(_wrap_phase(offset))
+        events.add(_wrap_phase(offset + parameters.duty_factor))
+    ordered = sorted(events)
+    counts = [
+        parameters.contact_state(0.5 * (lower + upper) * parameters.period).stance_count
+        for lower, upper in itertools.pairwise(ordered)
+    ]
+    return min(counts), max(counts)

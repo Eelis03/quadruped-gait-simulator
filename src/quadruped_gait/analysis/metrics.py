@@ -9,8 +9,9 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
+from quadruped_gait.algorithm.gait import exact_duty_factors, stance_count_extrema
 from quadruped_gait.algorithm.stability import stability_margins, support_polygon
-from quadruped_gait.model.geometry import LEG_COUNT, LEG_NAMES
+from quadruped_gait.model.geometry import LEG_COUNT, LEG_NAMES, LegId
 from quadruped_gait.pipeline.simulator import Trace
 from quadruped_gait.pipeline.sweep import DutySweepRow
 
@@ -22,12 +23,14 @@ __all__ = [
     "StabilitySummary",
     "contact_intervals",
     "contact_summary",
+    "critical_sample_indices",
     "round_trip_summary",
     "stability_series",
     "stability_summary",
     "summarise",
     "support_polygon_at",
     "sweep_stability",
+    "trace_window",
 ]
 
 
@@ -35,21 +38,40 @@ __all__ = [
 class ContactSummary:
     """How closely the realised contact schedule matched the command.
 
+    The realised quantities are computed in closed form from the schedule over the
+    time window the trace covers, not by counting samples. The sampled counterparts
+    are kept beside them, because a value read out of the gait parameters cannot on
+    its own detect a simulator that disagrees with its own scheduler, and the
+    difference between the two is exactly the discretisation error.
+
     Attributes:
         commanded_duty_factor: The duty factor the scheduler was given.
-        realised_duty_factors: Measured stance fraction of each leg over the trace.
-        max_absolute_error: Largest difference between a realised and the commanded
+        exact_duty_factors: Stance fraction of each leg over the trace window,
+            computed in closed form.
+        sampled_duty_factors: Stance fraction of each leg counted from the recorded
+            contact flags.
+        max_absolute_error: Largest difference between an exact and the commanded
             duty factor.
+        sampling_error: Largest difference between a sampled and an exact duty
+            factor, which is the discretisation error of the recorded trace.
         stance_count_histogram: How many samples had zero, one, two, three, or four
             feet loaded.
-        mean_stance_count: Mean number of loaded feet per sample.
+        stance_count_range: Smallest and largest number of loaded feet over a gait
+            cycle, computed exactly from the event times.
+        mean_stance_count: Mean number of loaded feet over the trace window,
+            computed in closed form as the sum of the exact duty factors.
+        sampled_mean_stance_count: Mean number of loaded feet per recorded sample.
     """
 
     commanded_duty_factor: float
-    realised_duty_factors: tuple[float, ...]
+    exact_duty_factors: tuple[float, ...]
+    sampled_duty_factors: tuple[float, ...]
     max_absolute_error: float
+    sampling_error: float
     stance_count_histogram: tuple[int, ...]
+    stance_count_range: tuple[int, int]
     mean_stance_count: float
+    sampled_mean_stance_count: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,21 +141,41 @@ class GaitReport:
     unreachable_samples: int
 
 
+def trace_window(trace: Trace) -> tuple[float, float]:
+    """Return the time interval the samples of ``trace`` stand for.
+
+    A sample at time ``t`` represents the cell ``[t, t + dt)``, so the window the
+    trace covers runs from the first sample time to one timestep past the last. This
+    is the interval over which an exact contact fraction is comparable with the
+    fraction counted from the samples.
+    """
+    if trace.times.size == 0:
+        raise ValueError("trace contains no samples")
+    return float(trace.times[0]), float(trace.times[-1]) + trace.config.timestep
+
+
 def contact_summary(trace: Trace) -> ContactSummary:
     """Measure the realised duty factor and support pattern of a trace."""
     contacts = np.asarray(trace.contacts, dtype=np.bool_)
     if contacts.shape[0] == 0:
         raise ValueError("trace contains no samples")
-    realised = contacts.mean(axis=0)
-    commanded = trace.config.gait.duty_factor
+    parameters = trace.config.gait
+    start, end = trace_window(trace)
+    exact = exact_duty_factors(parameters, start, end)
+    sampled = contacts.mean(axis=0)
+    commanded = parameters.duty_factor
     stance_counts = contacts.sum(axis=1)
     histogram = np.bincount(stance_counts, minlength=LEG_COUNT + 1)
     return ContactSummary(
         commanded_duty_factor=commanded,
-        realised_duty_factors=tuple(float(value) for value in realised),
-        max_absolute_error=float(np.max(np.abs(realised - commanded))),
+        exact_duty_factors=tuple(float(value) for value in exact),
+        sampled_duty_factors=tuple(float(value) for value in sampled),
+        max_absolute_error=float(np.max(np.abs(exact - commanded))),
+        sampling_error=float(np.max(np.abs(sampled - exact))),
         stance_count_histogram=tuple(int(value) for value in histogram),
-        mean_stance_count=float(stance_counts.mean()),
+        stance_count_range=stance_count_extrema(parameters),
+        mean_stance_count=float(np.sum(exact)),
+        sampled_mean_stance_count=float(stance_counts.mean()),
     )
 
 
@@ -198,46 +240,64 @@ def stability_summary(trace: Trace, series: NDArray[np.float64] | None = None) -
 def contact_intervals(trace: Trace) -> tuple[ContactInterval, ...]:
     """Return the stance intervals of every leg, the gait diagram in interval form.
 
-    Intervals are closed on the left and open on the right, and an interval that
-    is still open at the end of the trace is closed at the final sample time plus
-    one timestep.
+    The intervals come from the closed form schedule of the gait, clipped to the
+    window the trace covers, so an interval edge lands on the phase boundary itself
+    rather than on the nearest sample. Their total duration is therefore the exact
+    stance time, and the gait diagram drawn from them does not quantise to the
+    sampling grid.
     """
-    intervals: list[ContactInterval] = []
-    times = trace.times
-    step = trace.config.timestep
-    contacts = np.asarray(trace.contacts, dtype=np.bool_)
-    for leg_index in range(LEG_COUNT):
-        column = contacts[:, leg_index]
-        start: float | None = None
-        for sample_index in range(column.size):
-            loaded = bool(column[sample_index])
-            if loaded and start is None:
-                start = float(times[sample_index])
-            elif not loaded and start is not None:
-                intervals.append(
-                    ContactInterval(
-                        leg_index=leg_index,
-                        leg_name=LEG_NAMES[leg_index],
-                        start_time=start,
-                        end_time=float(times[sample_index]),
-                    )
-                )
-                start = None
-        if start is not None:
-            intervals.append(
-                ContactInterval(
-                    leg_index=leg_index,
-                    leg_name=LEG_NAMES[leg_index],
-                    start_time=start,
-                    end_time=float(times[-1]) + step,
-                )
-            )
-    return tuple(intervals)
+    start, end = trace_window(trace)
+    parameters = trace.config.gait
+    return tuple(
+        ContactInterval(
+            leg_index=int(leg_id),
+            leg_name=LEG_NAMES[int(leg_id)],
+            start_time=lower,
+            end_time=upper,
+        )
+        for leg_id in LegId
+        for lower, upper in parameters.stance_intervals(leg_id, start, end)
+    )
 
 
 def support_polygon_at(trace: Trace, index: int) -> NDArray[np.float64]:
     """Return the support polygon vertices at one sample, shape ``(m, 2)``."""
     return support_polygon(trace.foot_positions[index], trace.contacts[index]).vertices
+
+
+def critical_sample_indices(
+    trace: Trace, offsets: Sequence[float] = (-0.10, -0.05, 0.0, 0.05)
+) -> tuple[int, ...]:
+    """Return the samples lying at cycle ``offsets`` from the least stable instant.
+
+    The least stable instant is the sample with the smallest static stability
+    margin, searched over the interior of the trace so that the whole window of
+    offsets exists. A trace with no support polygon anywhere, which is every two
+    beat gait, has no least stable instant, so the middle of the trace is used.
+
+    Args:
+        trace: The run to examine.
+        offsets: Positions relative to the critical instant, in gait cycles.
+
+    Raises:
+        ValueError: If ``offsets`` is empty or the trace has no samples.
+    """
+    if not offsets:
+        raise ValueError("offsets must contain at least one entry")
+    count = len(trace)
+    if count == 0:
+        raise ValueError("trace contains no samples")
+    step = trace.config.timestep
+    shifts = [round(offset * trace.config.gait.period / step) for offset in offsets]
+    pad = min(max(max(shifts), -min(shifts), 0), (count - 1) // 2)
+    margins = stability_series(trace)[:, 0][pad : count - pad]
+    if margins.size == 0:
+        centre = count // 2
+    elif bool(np.isfinite(margins).any()):
+        centre = pad + int(np.nanargmin(margins))
+    else:
+        centre = pad + margins.size // 2
+    return tuple(int(np.clip(centre + shift, 0, count - 1)) for shift in shifts)
 
 
 @dataclass(frozen=True, slots=True)

@@ -88,6 +88,37 @@ the stated requirements is to verify that the realised contact fraction matches
 the commanded duty factor, an explicit scheduler is the only design that makes
 the check meaningful.
 
+### Contact fractions: measured in closed form rather than counted
+
+The stance indicator of one leg is a periodic step function of time, so the time
+that leg spends loaded within a window is an integral, not a tally. Writing
+`beta` for the duty factor, the measure of the stance set within `[0, x]` cycles
+is `floor(x) beta + min(x - floor(x), beta)`, and the measure over any interval
+is the difference of that expression at the two ends. The same formula holds for
+negative arguments, which is what makes the difference valid over a window that
+starts before the origin. `GaitParameters.stance_measure` is exactly this, and
+`stance_intervals` enumerates the loaded intervals directly from the touchdown
+instants `t = (k + phi_i) T`.
+
+The consequence is that the realised duty factor a run reports carries no
+discretisation error. It was previously the fraction of sampled instants at which
+a leg was loaded, which is wrong by up to one sampling interval and which is why
+a bound at 200 samples per cycle used to report a realised duty factor of 0.4042
+against a commanded 0.4000.
+
+The sampled measurement is kept beside the closed form one rather than deleted,
+because it answers a different question. The closed form value is a property of
+the gait parameters and would still be reported correctly if the simulator wrote
+contact flags that contradicted its own scheduler. The counted value is a
+measurement of what the trace actually holds. Reporting both, and asserting in
+the tests that they agree to within one sampling interval, keeps the audit that
+the closed form value on its own would have lost.
+
+Rejected: refining the sampling rate until the counted value was accurate enough.
+Halving the error costs twice the samples and twice the hull constructions in the
+stability analysis, and it never reaches an exact answer. A closed form that is
+correct at any sampling rate is both cheaper and stronger.
+
 ### Foot trajectories: neutral point footholds, cycloidal or Bezier swing
 
 A foothold is placed at the neutral point: the ground point under the leg's
@@ -239,6 +270,25 @@ offsets, the values are covered by the type checker, and there is no file
 loading path to test or to fail at runtime. `GaitParameters` is public, so a
 caller who needs a gait outside the library constructs one directly.
 
+### Choosing figure colours for colour vision deficiency rather than by default
+
+The four leg colours were the Matplotlib default cycle. Under simulated
+deuteranopia the green and the red of that cycle separate by about 4 units of
+OKLab distance, which is below the threshold at which two marks can be told
+apart, so a reader with the most common form of colour blindness could not
+distinguish the hind-left leg from the front-right one.
+
+Cost: the figures no longer match the default palette a reader may recognise
+from other Matplotlib output, and the four hues had to be checked rather than
+chosen.
+
+What it buys: every pair of leg colours now separates by at least 8 units under
+protanopia and deuteranopia. Colour is in any case never the only encoding: the
+gait diagrams name each leg on the axis, the support polygon figure carries a
+legend and distinguishes loaded from swinging feet by marker shape, and the duty
+factor sweep separates certified from uncertified points by marker fill rather
+than by hue.
+
 ## Known limitations
 
 1. **Fast gaits.** The quasi-static criterion assumes inertial terms are
@@ -276,18 +326,60 @@ caller who needs a gait outside the library constructs one directly.
    impact at touchdown, so the model cannot say anything about impact forces or
    about the momentum lost at each footfall.
 
-7. **Sampled rather than exact contact fractions.** The realised duty factor is
-   measured by counting samples, so it carries a discretisation error of up to
-   one sampling interval. At 200 samples per cycle that is 0.005. This is why
-   the bound reports a realised duty factor of 0.4042 against a commanded 0.4000
-   in the README results, and why the corresponding test asserts a tolerance
-   proportional to the sampling rate rather than exact equality.
-
-8. **A single centre of mass fixed in the trunk.** The centre of mass is a fixed
+7. **A single centre of mass fixed in the trunk.** The centre of mass is a fixed
    point in the trunk frame. In reality the legs carry a significant fraction of
    the mass and the whole body centre of mass moves as they swing. Removing this
    requires per-link masses, at which point the model is no longer purely
    kinematic.
+
+8. **Sampled stability extrema.** The minimum static margin a run reports is the
+   smallest value over the sampled instants, not the infimum over the interval.
+   For the gaits studied here the margin is piecewise smooth and its minima fall
+   at support transitions, which are sample times whenever the sampling rate
+   divides the cycle evenly, so the reported value is right in practice. It is
+   not guaranteed. Removing this needs the margin as a function of time in closed
+   form, which needs the identity of the critical support edge as a function of
+   time. That is tractable and is the obvious next thing to close.
+
+## Closed limitations
+
+### Sampled contact fractions, closed
+
+**What it was.** The realised duty factor was measured by counting the samples at
+which a leg was loaded, so it carried a discretisation error of up to one
+sampling interval. At 200 samples per cycle that is 0.005, and the bound reported
+a realised duty factor of 0.4042 against a commanded 0.4000. The corresponding
+test could only assert a tolerance proportional to the sampling rate.
+
+**What replaced it.** The closed form measure described under
+[Contact fractions](#contact-fractions-measured-in-closed-form-rather-than-counted).
+`ContactSummary` now carries `exact_duty_factors` and a `mean_stance_count`
+computed from them, with `sampled_duty_factors` and `sampled_mean_stance_count`
+beside them as the cross check. `contact_intervals` builds the gait diagram from
+the schedule rather than by scanning the recorded flags, so a diagram edge lands
+on the phase boundary rather than on the nearest sample. `stance_count_extrema`
+returns the exact range of loaded feet over a cycle by evaluating the count once
+between consecutive events, which is what lets the walk be described as never
+dropping below three feet rather than as not having been observed to.
+
+**What it cost.**
+
+- Two more fields on `ContactSummary` and two more rows in the text report. A
+  reader now has to be told which of two numbers is the answer, where before
+  there was only one number and it was slightly wrong.
+- A value derived from the gait parameters cannot audit the simulator. The
+  sampled measurement is therefore retained, together with a test asserting that
+  the two agree to within one sampling interval, which is a test that did not
+  need to exist before.
+- The gait diagram no longer depicts the recorded contact array directly. A test
+  now asserts that every sample falls inside an exact interval exactly when its
+  recorded flag is set, which restores that guarantee explicitly.
+
+**What remains.** Only the duty factor and the loaded interval boundaries became
+exact. The stance count histogram still counts samples, and so does the
+supported fraction, and the minimum and mean stability margins are still extrema
+and means over samples. That last one is now recorded as limitation 8 above,
+since it was previously hidden inside this entry.
 
 ## What does not follow from this model
 

@@ -19,9 +19,11 @@ from quadruped_gait.algorithm import (
     StabilityMargins,
     SupportPolygon,
     contact_schedule,
+    exact_duty_factors,
     gait,
-    realised_duty_factors,
+    sampled_duty_factors,
     stability_margins,
+    stance_count_extrema,
     support_polygon,
 )
 from quadruped_gait.analysis import (
@@ -68,6 +70,7 @@ __all__ = [
     "__version__",
     "contact_schedule",
     "default_robot",
+    "exact_duty_factors",
     "format_gait_diagram",
     "format_report",
     "format_summary_table",
@@ -75,9 +78,10 @@ __all__ = [
     "gait",
     "inverse_kinematics",
     "is_reachable",
-    "realised_duty_factors",
+    "sampled_duty_factors",
     "simulate",
     "stability_margins",
+    "stance_count_extrema",
     "summarise",
     "support_polygon",
 ]

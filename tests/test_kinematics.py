@@ -7,6 +7,7 @@ import math
 import numpy as np
 import pytest
 
+from quadruped_gait.model.contact import ContactState
 from quadruped_gait.model.geometry import LegGeometry, LegId, RobotModel, default_robot
 from quadruped_gait.model.kinematics import (
     JointAngles,
@@ -201,3 +202,74 @@ def test_hip_offsets_follow_the_leg_ordering() -> None:
     np.testing.assert_allclose(offsets[int(LegId.HIND_RIGHT)], [-0.25, -0.15, 0.0])
     assert RobotModel.lateral_sign(LegId.HIND_RIGHT) == -1.0
     assert RobotModel.longitudinal_sign(LegId.HIND_RIGHT) == -1.0
+
+
+def test_robot_model_rejects_a_degenerate_trunk() -> None:
+    leg = LegGeometry(abduction_offset=0.08, thigh_length=0.3, shank_length=0.3)
+    with pytest.raises(ValueError, match="must be positive"):
+        RobotModel(hip_half_length=0.0, hip_half_width=0.15, leg=leg, nominal_height=0.42)
+    with pytest.raises(ValueError, match="nominal_height"):
+        RobotModel(hip_half_length=0.25, hip_half_width=0.15, leg=leg, nominal_height=0.0)
+
+
+def test_nominal_feet_sit_below_and_outboard_of_their_hips() -> None:
+    robot = default_robot()
+    feet = robot.nominal_feet_in_body()
+    assert feet.shape == (4, 3)
+    for leg_id in LegId:
+        hip = robot.hip_offset(leg_id)
+        foot = feet[int(leg_id)]
+        assert foot[2] == pytest.approx(-robot.nominal_height)
+        assert abs(foot[1]) > abs(hip[1])
+        assert np.sign(foot[1]) == RobotModel.lateral_sign(leg_id)
+
+
+def test_contact_state_derives_its_views_from_the_flags() -> None:
+    state = ContactState(contacts=(True, False, True, True))
+    assert state.stance_legs == (LegId.FRONT_LEFT, LegId.HIND_LEFT, LegId.HIND_RIGHT)
+    assert state.swing_legs == (LegId.FRONT_RIGHT,)
+    assert state.stance_count == 3
+    np.testing.assert_array_equal(state.as_array(), [True, False, True, True])
+    assert str(state) == "FL .. HL HR"
+
+
+def test_contact_state_accepts_any_four_truthy_values() -> None:
+    from_array = ContactState.from_iterable(np.array([1, 0, 0, 1]))
+    assert from_array.contacts == (True, False, False, True)
+    assert ContactState.from_iterable([0, 0, 0, 0]).stance_count == 0
+
+
+def test_contact_state_rejects_the_wrong_number_of_flags() -> None:
+    with pytest.raises(ValueError, match="contact flags"):
+        ContactState(contacts=(True, False, True))  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="contact flags"):
+        ContactState.from_iterable([True, False, True])
+
+
+def test_joint_angle_sampling_validates_its_limits() -> None:
+    rng = np.random.default_rng(7)
+    with pytest.raises(ValueError, match="at least one"):
+        sample_joint_angles(0, rng)
+    with pytest.raises(ValueError, match="one interval per joint"):
+        sample_joint_angles(4, rng, limits=((-1.0, 1.0), (-1.0, 1.0)))
+    with pytest.raises(ValueError, match="positive width"):
+        sample_joint_angles(4, rng, limits=((-1.0, 1.0), (0.0, 0.0), (-1.0, 1.0)))
+
+
+def test_workspace_helpers_validate_their_array_shapes() -> None:
+    leg = LegGeometry(abduction_offset=0.08, thigh_length=0.3, shank_length=0.3)
+    with pytest.raises(ValueError, match=r"shape \(n, 3\)"):
+        workspace_points(leg, np.zeros((5, 2)), lateral_sign=1.0)
+    with pytest.raises(ValueError, match=r"shape \(n, 3\)"):
+        round_trip_errors(leg, np.zeros((5, 2)), lateral_sign=1.0)
+
+
+def test_round_trip_errors_report_nan_for_a_rejected_target() -> None:
+    """An unreachable target contributes nan rather than a wrong number."""
+    leg = LegGeometry(abduction_offset=0.08, thigh_length=0.3, shank_length=0.3)
+    reachable = np.array([[0.0, 0.08, -0.42]], dtype=np.float64)
+    unreachable = np.array([[0.0, 0.08, -2.0]], dtype=np.float64)
+    points = np.vstack([reachable, unreachable])
+    errors = round_trip_errors(leg, points, lateral_sign=1.0)
+    assert errors[0] < ROUND_TRIP_TOLERANCE
+    assert math.isnan(errors[1])

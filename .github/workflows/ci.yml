@@ -29,11 +29,23 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
+      # The gate sits two points below the measured coverage, so an unrelated
+      # change does not fail the build for shaving a fraction off the number,
+      # while a real drop in tested behaviour still does.
       - name: Run tests
-        run: uv run pytest -q
+        run: >
+          uv run pytest -q
+          --cov=src/quadruped_gait --cov-report=term-missing --cov-fail-under=96
 
       - name: Lint
         run: uv run ruff check .
 
       - name: Type check
         run: uv run mypy
+
+      # The committed figures are snapshots. This step checks that the command
+      # documented in the README still runs and still writes them; it does not
+      # compare the bytes, because Matplotlib output is not reproducible byte for
+      # byte across platforms or font configurations.
+      - name: Regenerate figures
+        run: uv run python examples/docs_figures.py --figure-dir "${{ runner.temp }}/figures"

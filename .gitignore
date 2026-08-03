@@ -9,5 +9,7 @@ dist/
 build/
 *.egg-info/
 outputs/
-figures/
+# Scratch output of the example scripts. The published figures live in
+# docs/figures/ and are tracked, so the pattern is anchored to the root.
+/figures/
 .DS_Store

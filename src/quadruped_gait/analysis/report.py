@@ -41,7 +41,7 @@ def format_summary_table(reports: Sequence[GaitReport]) -> str:
     for report in reports:
         contact = report.contact
         stability = report.stability
-        realised = sum(contact.realised_duty_factors) / len(contact.realised_duty_factors)
+        realised = sum(contact.exact_duty_factors) / len(contact.exact_duty_factors)
         lines.append(
             f"{report.gait_name:<7}"
             f"{contact.commanded_duty_factor:>7.3f}"
@@ -56,26 +56,39 @@ def format_summary_table(reports: Sequence[GaitReport]) -> str:
     return "\n".join(lines)
 
 
-def format_contact_summary(report: GaitReport) -> str:
-    """Render the per leg duty factors and the support pattern histogram."""
-    contact = report.contact
-    per_leg = "  ".join(
-        f"{name}={value:.4f}"
-        for name, value in zip(LEG_NAMES, contact.realised_duty_factors, strict=True)
+def _per_leg(values: Sequence[float]) -> str:
+    """Render one value per leg, labelled with the leg name."""
+    return "  ".join(
+        f"{name}={value:.4f}" for name, value in zip(LEG_NAMES, values, strict=True)
     )
+
+
+def format_contact_summary(report: GaitReport) -> str:
+    """Render the per leg duty factors and the support pattern histogram.
+
+    The realised rows are the closed form values. The sampled rows below them are
+    the same quantities counted from the recorded trace, and the gap between the
+    two is the discretisation error of the sampling rate.
+    """
+    contact = report.contact
     histogram = "  ".join(
         f"{count}feet={value}" for count, value in enumerate(contact.stance_count_histogram)
     )
+    low, high = contact.stance_count_range
     return (
         f"gait               {report.gait_name}\n"
         f"period             {report.period:.3f} s\n"
         f"forward velocity   {report.forward_velocity:.3f} m/s\n"
         f"stride length      {report.stride_length:.3f} m\n"
         f"commanded duty     {contact.commanded_duty_factor:.4f}\n"
-        f"realised duty      {per_leg}\n"
+        f"realised duty      {_per_leg(contact.exact_duty_factors)}\n"
         f"duty error         {contact.max_absolute_error:.2e}\n"
+        f"sampled duty       {_per_leg(contact.sampled_duty_factors)}\n"
+        f"sampling error     {contact.sampling_error:.2e}\n"
         f"support histogram  {histogram}\n"
+        f"feet down range    {low} to {high}\n"
         f"mean stance feet   {contact.mean_stance_count:.4f}\n"
+        f"sampled stance     {contact.sampled_mean_stance_count:.4f}\n"
         f"unreachable        {report.unreachable_samples}"
     )
 
