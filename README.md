@@ -135,16 +135,30 @@ rate is set to.
 Build a gait by hand and ask the schedule a question it can answer exactly:
 
 ```python
-from quadruped_gait import gait, stance_count_extrema
+from quadruped_gait import (
+    exact_supported_fraction,
+    gait,
+    stance_count_durations,
+    stance_count_extrema,
+)
 from quadruped_gait.model import LegId
 
 trot = gait("trot", period=0.5, duty_factor=0.5)
 print(trot.contact_state(0.125).stance_count)          # 2
 print(stance_count_extrema(trot))                      # (2, 2)
+print(stance_count_durations(trot))                    # (0.0, 0.0, 0.5, 0.0, 0.0)
+print(exact_supported_fraction(trot))                  # 0.0
 print(trot.stance_intervals(LegId.FRONT_LEFT, 0.0, 1.0))
 # ((0.0, 0.25), (0.5, 0.75))
 print(trot.stance_fraction(LegId.FRONT_LEFT, 0.0, 1.0))  # 0.5 exactly
 ```
+
+The third and fourth lines are the support histogram of the cycle as durations in
+seconds, and the fraction of the cycle with at least three feet down. Both are
+measures over the schedule rather than tallies over samples, so the trot's zero
+is a statement about the gait and not about the sampling rate. The same two calls
+put the reference walk at 0.8000 of its cycle on three feet and 0.2000 on four,
+where the histogram counted from a 200 sample cycle reads 479 and 121, or 0.2017.
 
 Solve the leg inverse kinematics directly:
 
@@ -341,8 +355,8 @@ uv run ruff check .
 uv run mypy
 ```
 
-311 tests pass in about 15 seconds. Statement coverage of `src/quadruped_gait` is
-98.43 percent, 19 uncovered statements out of 1207. CI runs the coverage command
+353 tests pass in about 15 seconds. Statement coverage of `src/quadruped_gait` is
+98.44 percent, 19 uncovered statements out of 1218. CI runs the coverage command
 above with `--cov-fail-under=96` and fails the build below that. `mypy` runs in
 strict mode over the whole package, on both Linux and Windows.
 
@@ -352,7 +366,9 @@ unreachable targets are reported for all three failure modes, that each gait is
 periodic with its configured period, that the closed form stance measure is
 additive over a split window and invariant under a whole cycle shift, that
 refining the sampling rate drives the counted duty factor onto the closed form
-one, that a trot has exactly two feet in stance and a walk at least three, that
+one, that the exact support histogram of a cycle is likewise the limit the
+counted histogram approaches and that its first moment is four times the duty
+factor, that a trot has exactly two feet in stance and a walk at least three, that
 the support polygon is empty below three non-collinear contacts, that loaded feet
 neither slip nor leave the ground plane, and that the sign convention of both
 margins matches values computed by hand on a unit square and on a right triangle.
@@ -396,7 +412,7 @@ inch. No compression dependency is involved.
 | `src/quadruped_gait/model/kinematics.py` | Forward kinematics, closed form inverse kinematics, reachability and branch tests |
 | `src/quadruped_gait/model/contact.py` | Contact state of the four feet and its derived views |
 | `src/quadruped_gait/model/workspace.py` | Workspace sampling and forward-inverse round trip error measurement |
-| `src/quadruped_gait/algorithm/gait.py` | Duty factor and phase offset scheduler, closed form stance measure and intervals, gait library |
+| `src/quadruped_gait/algorithm/gait.py` | Duty factor and phase offset scheduler, closed form stance measure, intervals and support durations, gait library |
 | `src/quadruped_gait/algorithm/swing.py` | Cycloidal and Bezier swing trajectories, de Casteljau evaluation, stance constraint |
 | `src/quadruped_gait/algorithm/stability.py` | Convex hull support polygon, static and longitudinal stability margins |
 | `src/quadruped_gait/pipeline/simulator.py` | Closed form trunk motion, foothold planning, and the recorded trace |

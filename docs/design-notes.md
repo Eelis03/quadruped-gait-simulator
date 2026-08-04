@@ -114,6 +114,18 @@ measurement of what the trace actually holds. Reporting both, and asserting in
 the tests that they agree to within one sampling interval, keeps the audit that
 the closed form value on its own would have lost.
 
+The same partition of the cycle answers the support question.
+`stance_count_durations` walks the cells that the touchdowns and the lift offs cut
+the cycle into, evaluates the loaded set once inside each one, and accumulates the
+cell length against the count it found, so the support histogram of a cycle is a
+measure rather than a tally. `exact_supported_fraction` is the part of that
+histogram with at least three feet down. Three loaded feet are necessary for a
+support polygon with an interior but not sufficient, because three collinear feet
+span no area, so the closed form fraction and the one a run reports agree only
+while no support triangle degenerates. That is a geometric condition the schedule
+cannot see and the trace can, which is the same division of labour as between the
+exact and the sampled duty factor.
+
 Rejected: refining the sampling rate until the counted value was accurate enough.
 Halving the error costs twice the samples and twice the hull constructions in the
 stability analysis, and it never reaches an exact answer. A closed form that is
@@ -376,10 +388,14 @@ dropping below three feet rather than as not having been observed to.
   recorded flag is set, which restores that guarantee explicitly.
 
 **What remains.** Only the duty factor and the loaded interval boundaries became
-exact. The stance count histogram still counts samples, and so does the
-supported fraction, and the minimum and mean stability margins are still extrema
-and means over samples. That last one is now recorded as limitation 8 above,
-since it was previously hidden inside this entry.
+exact. The stance count histogram a report prints still counts samples, and so
+does its supported fraction, and the minimum and mean stability margins are still
+extrema and means over samples. `stance_count_durations` and
+`exact_supported_fraction` answer the first two off the schedule, so a caller who
+wants the exact values has them, while the report keeps the counted ones for the
+audit reason above. The margins are the part with no closed form here at all, and
+are now recorded as limitation 8 above, since they were previously hidden inside
+this entry.
 
 ## What does not follow from this model
 

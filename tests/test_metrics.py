@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from quadruped_gait.algorithm.gait import GAIT_NAMES, gait
+from quadruped_gait.algorithm.gait import GAIT_NAMES, exact_supported_fraction, gait
 from quadruped_gait.analysis import (
     contact_intervals,
     contact_summary,
@@ -135,6 +135,33 @@ def test_the_exact_duty_factor_survives_a_partial_final_cycle(name: str) -> None
         assert summary.exact_duty_factors[int(leg_id)] == pytest.approx(
             expected, abs=EXACT_TOLERANCE
         )
+
+
+@pytest.mark.parametrize("duty_factor", [0.65, 0.70, 0.75, 0.80])
+def test_the_sampled_supported_fraction_cross_checks_the_closed_form_one(
+    duty_factor: float,
+) -> None:
+    """The reported supported fraction counts samples; the schedule knows the measure.
+
+    A run reports the fraction of sampled instants whose support polygon has an
+    interior, so it quantises each support transition to the sampling grid. The
+    closed form fraction of the cycle with three feet down does not, and the two have
+    to agree to within the interval a sample stands for at every transition.
+    """
+    samples_per_cycle = 200
+    trace = simulate(
+        SimulationConfig(
+            robot=default_robot(),
+            gait=gait("walk", duty_factor=duty_factor),
+            command=BodyCommand(forward_velocity=0.3, sway_amplitude=0.06),
+            cycles=2.0,
+            samples_per_cycle=samples_per_cycle,
+        )
+    )
+    summary = stability_summary(trace)
+    assert summary.supported_fraction == pytest.approx(
+        exact_supported_fraction(trace.config.gait), abs=LEG_COUNT * 2.0 / samples_per_cycle
+    )
 
 
 def test_the_reported_feet_down_range_is_the_exact_one() -> None:
