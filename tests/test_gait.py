@@ -413,9 +413,7 @@ def test_stance_count_durations_match_the_published_footfall_patterns(
     parameters = gait(name)
     durations = stance_count_durations(parameters)
     for count, fraction in enumerate(expected):
-        assert durations[count] == pytest.approx(
-            fraction * parameters.period, abs=EXACT_TOLERANCE
-        )
+        assert durations[count] == pytest.approx(fraction * parameters.period, abs=EXACT_TOLERANCE)
 
 
 def test_the_reference_walk_spends_a_fifth_of_its_cycle_on_four_feet() -> None:
