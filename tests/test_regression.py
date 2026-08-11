@@ -94,15 +94,11 @@ def recorded() -> dict[str, Any]:
     return _build_reference()
 
 
-def test_configuration_has_not_drifted(
-    reference: dict[str, Any], recorded: dict[str, Any]
-) -> None:
+def test_configuration_has_not_drifted(reference: dict[str, Any], recorded: dict[str, Any]) -> None:
     assert recorded["config"] == reference["config"]
 
 
-def test_probe_layout_has_not_drifted(
-    reference: dict[str, Any], recorded: dict[str, Any]
-) -> None:
+def test_probe_layout_has_not_drifted(reference: dict[str, Any], recorded: dict[str, Any]) -> None:
     assert recorded["probe_indices"] == reference["probe_indices"]
     np.testing.assert_allclose(recorded["times"], reference["times"], atol=1e-12)
 
@@ -115,9 +111,7 @@ def test_body_positions_match_the_reference(
     )
 
 
-def test_contacts_match_the_reference(
-    reference: dict[str, Any], recorded: dict[str, Any]
-) -> None:
+def test_contacts_match_the_reference(reference: dict[str, Any], recorded: dict[str, Any]) -> None:
     np.testing.assert_array_equal(recorded["contacts"], reference["contacts"])
 
 
@@ -144,9 +138,7 @@ def test_stability_series_matches_the_reference(
     np.testing.assert_allclose(recorded[key], reference[key], atol=MARGIN_TOLERANCE)
 
 
-def test_summary_matches_the_reference(
-    reference: dict[str, Any], recorded: dict[str, Any]
-) -> None:
+def test_summary_matches_the_reference(reference: dict[str, Any], recorded: dict[str, Any]) -> None:
     assert set(recorded["summary"]) == set(reference["summary"])
     for key, value in reference["summary"].items():
         assert recorded["summary"][key] == pytest.approx(value, abs=MARGIN_TOLERANCE)

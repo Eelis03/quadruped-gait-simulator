@@ -254,9 +254,7 @@ def _planned_foothold(
     return _neutral_foothold(config, leg_id, mid_stance)
 
 
-def _foot_position(
-    config: SimulationConfig, leg_id: LegId, time: float
-) -> NDArray[np.float64]:
+def _foot_position(config: SimulationConfig, leg_id: LegId, time: float) -> NDArray[np.float64]:
     """Return the world position of one foot at ``time``."""
     parameters = config.gait
     phase = parameters.leg_phase(time, leg_id)

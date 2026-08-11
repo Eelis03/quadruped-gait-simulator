@@ -133,13 +133,27 @@ def duty_sweep_figure(
     upper.axvline(threshold, color=_INK, linewidth=0.9, linestyle="--", zorder=1)
     # Status is carried by marker fill and by the legend text, never by hue alone.
     upper.plot(
-        duty[stable], margin[stable], linestyle="none", marker="o", markersize=6,
-        color=_PRIMARY, label="every sample supported with a positive margin", zorder=3,
+        duty[stable],
+        margin[stable],
+        linestyle="none",
+        marker="o",
+        markersize=6,
+        color=_PRIMARY,
+        label="every sample supported with a positive margin",
+        zorder=3,
     )
     upper.plot(
-        duty[~stable], margin[~stable], linestyle="none", marker="o", markersize=6,
-        markerfacecolor="white", markeredgecolor=_PRIMARY, markeredgewidth=1.6,
-        color=_PRIMARY, label="not certified by the quasi-static criterion", zorder=3,
+        duty[~stable],
+        margin[~stable],
+        linestyle="none",
+        marker="o",
+        markersize=6,
+        markerfacecolor="white",
+        markeredgecolor=_PRIMARY,
+        markeredgewidth=1.6,
+        color=_PRIMARY,
+        label="not certified by the quasi-static criterion",
+        zorder=3,
     )
     upper.set_ylabel("minimum static margin (m)")
     # Headroom so that the legend clears the left branch of the curve.
@@ -147,9 +161,7 @@ def duty_sweep_figure(
     upper.set_ylim(top=max(ceiling, 1e-6) * 1.55)
     upper.legend(loc="upper left", fontsize=8, frameon=False)
     upper.grid(alpha=_GRID_ALPHA)
-    upper.set_title(
-        title or "Static stability of a lateral sequence walk against duty factor"
-    )
+    upper.set_title(title or "Static stability of a lateral sequence walk against duty factor")
 
     at_threshold = np.flatnonzero(np.isclose(duty, threshold))
     if at_threshold.size:
@@ -240,12 +252,19 @@ def foot_trajectory_figure(trace: Trace, title: str | None = None) -> Figure:
         sagittal.plot(path[:, 0], path[:, 2], color=colour, label=LEG_NAMES[leg_index], linewidth=1)
         horizontal.plot(path[:, 0], path[:, 1], color=colour, linewidth=1)
     sagittal.plot(
-        trace.body_positions[:, 0], trace.body_positions[:, 2], color=_INK,
-        linestyle="--", linewidth=1, label="trunk",
+        trace.body_positions[:, 0],
+        trace.body_positions[:, 2],
+        color=_INK,
+        linestyle="--",
+        linewidth=1,
+        label="trunk",
     )
     horizontal.plot(
-        trace.com_positions[:, 0], trace.com_positions[:, 1], color=_INK,
-        linestyle="--", linewidth=1,
+        trace.com_positions[:, 0],
+        trace.com_positions[:, 1],
+        color=_INK,
+        linestyle="--",
+        linewidth=1,
     )
     sagittal.set_ylabel("z (m)")
     sagittal.set_title(title or f"{trace.config.gait.name} foot paths in the world frame")
@@ -293,7 +312,8 @@ def support_polygon_figure(
         for leg_index in range(LEG_COUNT):
             loaded = bool(contacts[leg_index])
             axes.plot(
-                feet[leg_index, 0], feet[leg_index, 1],
+                feet[leg_index, 0],
+                feet[leg_index, 1],
                 marker="o" if loaded else "X",
                 color=_LEG_COLOURS[leg_index],
                 markersize=7,
@@ -301,8 +321,12 @@ def support_polygon_figure(
                 label=LEG_NAMES[leg_index] if column == 0 else None,
             )
         axes.plot(
-            trace.com_positions[index, 0], trace.com_positions[index, 1],
-            marker="*", color=_INK, markersize=11, linestyle="none",
+            trace.com_positions[index, 0],
+            trace.com_positions[index, 1],
+            marker="*",
+            color=_INK,
+            markersize=11,
+            linestyle="none",
             label="centre of mass" if column == 0 else None,
         )
         margin = "undefined" if margins.static != margins.static else f"{margins.static:.5f} m"

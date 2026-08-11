@@ -12,4 +12,7 @@ outputs/
 # Scratch output of the example scripts. The published figures live in
 # docs/figures/ and are tracked, so the pattern is anchored to the root.
 /figures/
+.coverage
+.coverage.*
+htmlcov/
 .DS_Store

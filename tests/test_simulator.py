@@ -94,9 +94,7 @@ def test_feet_advance_one_stride_per_cycle(name: str) -> None:
 
 def test_trunk_advances_at_the_commanded_velocity() -> None:
     trace = simulate(_config("walk", forward_velocity=0.35))
-    np.testing.assert_allclose(
-        trace.body_positions[:, 0], 0.35 * trace.times, atol=1e-12
-    )
+    np.testing.assert_allclose(trace.body_positions[:, 0], 0.35 * trace.times, atol=1e-12)
     np.testing.assert_allclose(trace.body_positions[:, 2], 0.42, atol=1e-12)
 
 
@@ -142,13 +140,9 @@ def test_forward_kinematics_reproduces_the_commanded_feet() -> None:
         rotation = rotation_z(float(trace.body_yaws[index]))
         for leg_id in LegId:
             angles = JointAngles.from_array(trace.joint_angles[index, int(leg_id)])
-            in_hip = forward_kinematics(
-                robot.leg, angles, lateral_sign=robot.lateral_sign(leg_id)
-            )
+            in_hip = forward_kinematics(robot.leg, angles, lateral_sign=robot.lateral_sign(leg_id))
             world = rotation @ (in_hip + robot.hip_offset(leg_id)) + trace.body_positions[index]
-            np.testing.assert_allclose(
-                world, trace.foot_positions[index, int(leg_id)], atol=1e-9
-            )
+            np.testing.assert_allclose(world, trace.foot_positions[index, int(leg_id)], atol=1e-9)
 
 
 @pytest.mark.parametrize("profile", ["cycloidal", "bezier"])

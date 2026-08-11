@@ -4,7 +4,7 @@ A kinematic quadruped that measures its own static stability, and reproduces the
 three quarter duty factor threshold of McGhee and Frank (1968) by measurement.
 
 [![CI](https://github.com/Eelis03/quadruped-gait-simulator/actions/workflows/ci.yml/badge.svg)](https://github.com/Eelis03/quadruped-gait-simulator/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ![Minimum static stability margin of a lateral sequence walk plotted against duty factor, falling almost linearly to exactly zero at a duty factor of three quarters and rising again above it, with a second panel showing the fraction of the cycle that has a support polygon reaching one at that same duty factor](docs/figures/duty_factor_sweep.png)
@@ -94,7 +94,9 @@ the method each was weighed against.
 
 ## Installation
 
-Requires Python 3.12 or later.
+Requires Python 3.12 or later. Continuous integration runs the whole suite on
+3.12 and 3.13, on Linux and on Windows, so the version floor in `pyproject.toml`
+is a tested claim rather than a declared one.
 
 ```bash
 git clone https://github.com/Eelis03/quadruped-gait-simulator.git
@@ -122,9 +124,9 @@ from quadruped_gait.pipeline import reference_walk
 trace = simulate(reference_walk(cycles=3.0, samples_per_cycle=200))
 report = summarise(trace)
 
-print(report.stability.minimum_static)         # 0.01233... metres
-print(report.stability.statically_stable)      # True
-print(report.contact.exact_duty_factors[0])    # 0.8000000000000002
+print(report.stability.minimum_static)  # 0.01233... metres
+print(report.stability.statically_stable)  # True
+print(report.contact.exact_duty_factors[0])  # 0.8000000000000002
 print(format_report(report))
 ```
 
@@ -144,10 +146,10 @@ from quadruped_gait import (
 from quadruped_gait.model import LegId
 
 trot = gait("trot", period=0.5, duty_factor=0.5)
-print(trot.contact_state(0.125).stance_count)          # 2
-print(stance_count_extrema(trot))                      # (2, 2)
-print(stance_count_durations(trot))                    # (0.0, 0.0, 0.5, 0.0, 0.0)
-print(exact_supported_fraction(trot))                  # 0.0
+print(trot.contact_state(0.125).stance_count)  # 2
+print(stance_count_extrema(trot))  # (2, 2)
+print(stance_count_durations(trot))  # (0.0, 0.0, 0.5, 0.0, 0.0)
+print(exact_supported_fraction(trot))  # 0.0
 print(trot.stance_intervals(LegId.FRONT_LEFT, 0.0, 1.0))
 # ((0.0, 0.25), (0.5, 0.75))
 print(trot.stance_fraction(LegId.FRONT_LEFT, 0.0, 1.0))  # 0.5 exactly
@@ -171,7 +173,7 @@ from quadruped_gait.model import LegId
 robot = default_robot()
 target = robot.nominal_foot_in_hip(LegId.FRONT_LEFT)
 angles = inverse_kinematics(robot.leg, target, lateral_sign=1.0)
-print(math.degrees(angles.knee_pitch))             # -91.1459...
+print(math.degrees(angles.knee_pitch))  # -91.1459...
 ```
 
 ## Results
@@ -352,6 +354,7 @@ left of it.
 uv run pytest -q
 uv run pytest --cov=src/quadruped_gait --cov-report=term-missing
 uv run ruff check .
+uv run ruff format --check .
 uv run mypy
 ```
 

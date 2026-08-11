@@ -316,9 +316,9 @@ def gait(
 def leg_phases(parameters: GaitParameters, times: NDArray[np.float64]) -> NDArray[np.float64]:
     """Return the cycle position of every leg at every sample time, shape ``(n, 4)``."""
     sample_times = np.asarray(times, dtype=np.float64).reshape(-1)
-    return np.array(
-        [parameters.phases(float(t)) for t in sample_times], dtype=np.float64
-    ).reshape(sample_times.size, LEG_COUNT)
+    return np.array([parameters.phases(float(t)) for t in sample_times], dtype=np.float64).reshape(
+        sample_times.size, LEG_COUNT
+    )
 
 
 def contact_schedule(parameters: GaitParameters, times: NDArray[np.float64]) -> NDArray[np.bool_]:
@@ -347,9 +347,7 @@ def sampled_duty_factors(schedule: NDArray[np.bool_]) -> NDArray[np.float64]:
     return np.asarray(array.mean(axis=0), dtype=np.float64)
 
 
-def exact_duty_factors(
-    parameters: GaitParameters, start: float, end: float
-) -> NDArray[np.float64]:
+def exact_duty_factors(parameters: GaitParameters, start: float, end: float) -> NDArray[np.float64]:
     """Return the exact stance fraction of every leg over ``[start, end]``, shape ``(4,)``.
 
     The values come from the closed form of the schedule, so over a whole number of

@@ -106,9 +106,7 @@ class CycloidalSwing:
         )
 
 
-def bezier_point(
-    control_points: NDArray[np.float64], parameter: float
-) -> NDArray[np.float64]:
+def bezier_point(control_points: NDArray[np.float64], parameter: float) -> NDArray[np.float64]:
     """Evaluate a Bezier curve by the de Casteljau algorithm.
 
     Args:
@@ -200,9 +198,7 @@ def make_swing(
     raise KeyError(f"unknown swing profile {profile!r}; expected 'cycloidal' or 'bezier'")
 
 
-def stance_foot_in_body(
-    pose: BodyPose, foot_in_world: NDArray[np.float64]
-) -> NDArray[np.float64]:
+def stance_foot_in_body(pose: BodyPose, foot_in_world: NDArray[np.float64]) -> NDArray[np.float64]:
     """Return the trunk frame position of a stationary loaded foot.
 
     A foot in stance does not slip, so its world position is constant and all of

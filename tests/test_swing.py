@@ -65,9 +65,7 @@ def test_cycloidal_swing_has_zero_horizontal_velocity_at_both_ends() -> None:
 
 def test_cycloidal_swing_velocity_peaks_at_mid_swing() -> None:
     trajectory = CycloidalSwing(lift_off=LIFT_OFF, touch_down=TOUCH_DOWN, clearance=CLEARANCE)
-    speeds = [
-        float(np.linalg.norm(trajectory.velocity(s / 100.0, 0.25))) for s in range(101)
-    ]
+    speeds = [float(np.linalg.norm(trajectory.velocity(s / 100.0, 0.25))) for s in range(101)]
     assert int(np.argmax(speeds)) == 50
 
 
@@ -96,9 +94,7 @@ def test_bezier_point_matches_the_bernstein_expansion() -> None:
         expected = np.zeros(3)
         for index in range(control.shape[0]):
             weight = (
-                math.comb(degree, index)
-                * parameter**index
-                * (1.0 - parameter) ** (degree - index)
+                math.comb(degree, index) * parameter**index * (1.0 - parameter) ** (degree - index)
             )
             expected += weight * control[index]
         np.testing.assert_allclose(bezier_point(control, parameter), expected, atol=1e-12)

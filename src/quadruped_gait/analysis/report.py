@@ -58,9 +58,7 @@ def format_summary_table(reports: Sequence[GaitReport]) -> str:
 
 def _per_leg(values: Sequence[float]) -> str:
     """Render one value per leg, labelled with the leg name."""
-    return "  ".join(
-        f"{name}={value:.4f}" for name, value in zip(LEG_NAMES, values, strict=True)
-    )
+    return "  ".join(f"{name}={value:.4f}" for name, value in zip(LEG_NAMES, values, strict=True))
 
 
 def format_contact_summary(report: GaitReport) -> str:

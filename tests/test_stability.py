@@ -140,9 +140,9 @@ def test_longitudinal_margin_of_a_square_is_hand_computed() -> None:
     """Along x the square extends one metre either side of its centre."""
     assert longitudinal_stability_margin(SQUARE, np.array([0.0, 0.0])) == pytest.approx(1.0)
     assert longitudinal_stability_margin(SQUARE, np.array([0.25, 0.0])) == pytest.approx(0.75)
-    assert longitudinal_stability_margin(
-        SQUARE, np.array([0.0, 0.0]), (0.0, 1.0)
-    ) == pytest.approx(1.0)
+    assert longitudinal_stability_margin(SQUARE, np.array([0.0, 0.0]), (0.0, 1.0)) == pytest.approx(
+        1.0
+    )
 
 
 def test_longitudinal_margin_is_negative_when_the_line_misses_the_point() -> None:
