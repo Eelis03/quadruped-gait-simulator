@@ -8,9 +8,11 @@ from quadruped_gait.algorithm.gait import (
     GaitParameters,
     contact_schedule,
     exact_duty_factors,
+    exact_supported_fraction,
     gait,
     leg_phases,
     sampled_duty_factors,
+    stance_count_durations,
     stance_count_extrema,
 )
 from quadruped_gait.algorithm.stability import (
@@ -47,6 +49,7 @@ __all__ = [
     "convex_hull_2d",
     "distance_to_boundary",
     "exact_duty_factors",
+    "exact_supported_fraction",
     "gait",
     "leg_phases",
     "longitudinal_stability_margin",
@@ -54,6 +57,7 @@ __all__ = [
     "point_in_convex_polygon",
     "sampled_duty_factors",
     "stability_margins",
+    "stance_count_durations",
     "stance_count_extrema",
     "stance_foot_in_body",
     "static_stability_margin",

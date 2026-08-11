@@ -11,9 +11,11 @@ from quadruped_gait.algorithm.gait import (
     GaitParameters,
     contact_schedule,
     exact_duty_factors,
+    exact_supported_fraction,
     gait,
     leg_phases,
     sampled_duty_factors,
+    stance_count_durations,
     stance_count_extrema,
 )
 from quadruped_gait.model.geometry import LEG_COUNT, LegId
@@ -379,3 +381,130 @@ def test_stance_count_extrema_bracket_a_dense_sampling() -> None:
         counts = contact_schedule(parameters, times).sum(axis=1)
         assert low <= int(counts.min())
         assert int(counts.max()) <= high
+
+
+# The closed form support histogram. These are the counterpart of the sampled
+# histogram a report prints, measured on the event partition of the cycle.
+
+
+@pytest.mark.parametrize("name", GAIT_NAMES)
+def test_stance_count_durations_partition_the_cycle(name: str) -> None:
+    """Every instant has exactly one stance count, so the durations total the period."""
+    parameters = gait(name)
+    durations = stance_count_durations(parameters)
+    assert len(durations) == LEG_COUNT + 1
+    assert all(value >= 0.0 for value in durations)
+    assert sum(durations) == pytest.approx(parameters.period, abs=EXACT_TOLERANCE)
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("walk", (0.0, 0.0, 0.0, 1.0, 0.0)),
+        ("trot", (0.0, 0.0, 1.0, 0.0, 0.0)),
+        ("pace", (0.0, 0.0, 1.0, 0.0, 0.0)),
+        ("bound", (0.2, 0.0, 0.8, 0.0, 0.0)),
+    ],
+)
+def test_stance_count_durations_match_the_published_footfall_patterns(
+    name: str, expected: tuple[float, ...]
+) -> None:
+    """A walk holds three feet, a trot and a pace two, a bound is airborne a fifth of the time."""
+    parameters = gait(name)
+    durations = stance_count_durations(parameters)
+    for count, fraction in enumerate(expected):
+        assert durations[count] == pytest.approx(fraction * parameters.period, abs=EXACT_TOLERANCE)
+
+
+def test_the_reference_walk_spends_a_fifth_of_its_cycle_on_four_feet() -> None:
+    """Swing windows of 0.20 cycles spaced by 0.25 leave four gaps of 0.05 with nothing airborne."""
+    parameters = gait("walk", duty_factor=0.80)
+    durations = stance_count_durations(parameters)
+    assert durations[3] == pytest.approx(0.8 * parameters.period, abs=EXACT_TOLERANCE)
+    assert durations[4] == pytest.approx(0.2 * parameters.period, abs=EXACT_TOLERANCE)
+
+
+@pytest.mark.parametrize("name", GAIT_NAMES)
+def test_stance_count_durations_reproduce_the_mean_stance_count(name: str) -> None:
+    """The first moment of the histogram is four times the duty factor, exactly."""
+    parameters = gait(name)
+    durations = stance_count_durations(parameters)
+    weighted = sum(count * value for count, value in enumerate(durations)) / parameters.period
+    assert weighted == pytest.approx(LEG_COUNT * parameters.duty_factor, abs=EXACT_TOLERANCE)
+
+
+@pytest.mark.parametrize("name", GAIT_NAMES)
+def test_only_counts_inside_the_exact_range_have_a_duration(name: str) -> None:
+    """The two views of the event partition have to agree about which counts occur."""
+    parameters = gait(name)
+    low, high = stance_count_extrema(parameters)
+    for count, value in enumerate(stance_count_durations(parameters)):
+        if low <= count <= high:
+            continue
+        assert value == 0.0
+
+
+@pytest.mark.parametrize("name", GAIT_NAMES)
+def test_stance_count_durations_are_the_limit_the_sampled_histogram_approaches(name: str) -> None:
+    """Refining the sampling rate drives the counted histogram onto the closed form.
+
+    The duty factor is nudged off the published value first. The library ones put
+    every support transition on a cell edge of the grids sampled here, where a counted
+    histogram is already exact and would say nothing about a limit.
+    """
+    parameters = gait(name, duty_factor=gait(name).duty_factor + 0.0121)
+    exact = np.asarray(stance_count_durations(parameters)) / parameters.period
+    errors = []
+    for per_cycle in (53, 501, 5003):
+        times = _midpoint_times(parameters, cycles=1, per_cycle=per_cycle)
+        counts = contact_schedule(parameters, times).sum(axis=1)
+        counted = np.bincount(counts, minlength=LEG_COUNT + 1) / counts.size
+        errors.append(float(np.max(np.abs(counted - exact))))
+        assert errors[-1] <= 2.0 / per_cycle
+    assert errors[-1] <= errors[0]
+
+
+def test_stance_count_durations_are_computed_by_hand_on_a_probe_gait() -> None:
+    """An irregular gait whose event partition is short enough to enumerate."""
+    parameters = GaitParameters(
+        name="probe", period=1.0, duty_factor=0.6, phase_offsets=(0.0, 0.2, 0.5, 0.7)
+    )
+    # The four legs are loaded on [0.0, 0.6), [0.2, 0.8), [0.5, 1.1) and [0.7, 1.3) of
+    # each cycle. Reading the count off that list on the eight cells the touchdowns
+    # and lift offs cut the cycle into gives 3, 2, 3, 2, 3, 2, 3, 2 over cells of
+    # length 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.2, so three feet are down for 0.4 of
+    # the cycle and two for the remaining 0.6.
+    durations = stance_count_durations(parameters)
+    assert durations == pytest.approx((0.0, 0.0, 0.6, 0.4, 0.0), abs=EXACT_TOLERANCE)
+    assert exact_supported_fraction(parameters) == pytest.approx(0.4, abs=EXACT_TOLERANCE)
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"), [("walk", 1.0), ("trot", 0.0), ("pace", 0.0), ("bound", 0.0)]
+)
+def test_exact_supported_fraction_of_the_library_gaits(name: str, expected: float) -> None:
+    """Only the walk ever has three feet down, which is why only it has a margin at all."""
+    assert exact_supported_fraction(gait(name)) == pytest.approx(expected, abs=EXACT_TOLERANCE)
+
+
+@pytest.mark.parametrize("duty_factor", [0.40, 0.50, 0.60, 0.65, 0.70, 0.75, 0.80, 1.0])
+def test_exact_supported_fraction_of_a_walk_follows_the_quarter_spacing_formula(
+    duty_factor: float,
+) -> None:
+    """Adjacent swing windows overlap by ``0.75 - beta``, and four of them do.
+
+    The unsupported measure is therefore ``4 (0.75 - beta)`` while that is positive,
+    which puts the supported fraction at ``4 beta - 2`` and sends it to one exactly
+    at the three quarter threshold of McGhee and Frank (1968).
+    """
+    parameters = gait("walk", duty_factor=duty_factor)
+    expected = min(max(4.0 * duty_factor - 2.0, 0.0), 1.0)
+    assert exact_supported_fraction(parameters) == pytest.approx(expected, abs=EXACT_TOLERANCE)
+
+
+@pytest.mark.parametrize("name", GAIT_NAMES)
+def test_exact_supported_fraction_is_the_measure_of_the_supported_counts(name: str) -> None:
+    parameters = gait(name)
+    durations = stance_count_durations(parameters)
+    supported = (durations[3] + durations[4]) / parameters.period
+    assert exact_supported_fraction(parameters) == pytest.approx(supported, abs=EXACT_TOLERANCE)

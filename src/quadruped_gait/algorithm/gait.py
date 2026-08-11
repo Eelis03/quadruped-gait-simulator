@@ -37,15 +37,19 @@ __all__ = [
     "GaitParameters",
     "contact_schedule",
     "exact_duty_factors",
+    "exact_supported_fraction",
     "gait",
     "leg_phases",
     "sampled_duty_factors",
+    "stance_count_durations",
     "stance_count_extrema",
 ]
 
 # Phases that land within this distance of a full cycle are snapped to zero so that
 # the schedule stays exactly periodic under floating point time accumulation.
 _PHASE_EPSILON = 1e-9
+# Fewest loaded feet that can span a support polygon with an interior.
+_SUPPORT_MINIMUM = 3
 
 
 def _wrap_phase(value: float) -> float:
@@ -355,6 +359,21 @@ def exact_duty_factors(parameters: GaitParameters, start: float, end: float) -> 
     )
 
 
+def _event_phases(parameters: GaitParameters) -> list[float]:
+    """Return the sorted cycle positions at which the set of loaded feet can change.
+
+    The set changes only at a touchdown or a lift off, so the cells this partition
+    cuts the cycle into are the coarsest ones on which the number of loaded feet is
+    constant. Evaluating the contact state once inside a cell therefore answers any
+    question about that number over the whole cell.
+    """
+    events = {0.0, 1.0}
+    for offset in parameters.phase_offsets:
+        events.add(_wrap_phase(offset))
+        events.add(_wrap_phase(offset + parameters.duty_factor))
+    return sorted(events)
+
+
 def stance_count_extrema(parameters: GaitParameters) -> tuple[int, int]:
     """Return the smallest and largest number of loaded feet over one gait cycle.
 
@@ -364,13 +383,42 @@ def stance_count_extrema(parameters: GaitParameters) -> tuple[int, int]:
     quasi-static criterion turns on: a walk never drops below three loaded feet,
     a trot and a pace hold exactly two, and a bound reaches zero.
     """
-    events = {0.0, 1.0}
-    for offset in parameters.phase_offsets:
-        events.add(_wrap_phase(offset))
-        events.add(_wrap_phase(offset + parameters.duty_factor))
-    ordered = sorted(events)
     counts = [
         parameters.contact_state(0.5 * (lower + upper) * parameters.period).stance_count
-        for lower, upper in itertools.pairwise(ordered)
+        for lower, upper in itertools.pairwise(_event_phases(parameters))
     ]
     return min(counts), max(counts)
+
+
+def stance_count_durations(
+    parameters: GaitParameters,
+) -> tuple[float, float, float, float, float]:
+    """Return how long one cycle holds zero, one, two, three, and four feet loaded.
+
+    Entry ``k`` is the time in seconds during which exactly ``k`` feet are on the
+    ground, so the five entries sum to the period. Each is a measure over the event
+    partition rather than a tally of samples, which is what the support histogram of
+    a report remains: at 200 samples per cycle that histogram puts the four foot
+    interval of the reference walk at 121 samples out of 600, or 0.2017 of the cycle,
+    against the 0.2000 the schedule fixes.
+    """
+    durations = [0.0] * (LEG_COUNT + 1)
+    for lower, upper in itertools.pairwise(_event_phases(parameters)):
+        state = parameters.contact_state(0.5 * (lower + upper) * parameters.period)
+        durations[state.stance_count] += (upper - lower) * parameters.period
+    return (durations[0], durations[1], durations[2], durations[3], durations[4])
+
+
+def exact_supported_fraction(parameters: GaitParameters) -> float:
+    """Return the fraction of the cycle during which at least three feet are loaded.
+
+    This is the closed form counterpart of the supported fraction a run reports,
+    which counts the sampled instants whose support polygon has an interior. Three
+    loaded feet are necessary for such a polygon but not sufficient, since three
+    collinear feet span no area, so the two quantities coincide only while no support
+    triangle degenerates. For a lateral sequence walk, whose swing windows are spaced
+    a quarter cycle apart, the value is ``4 beta - 2`` clipped to ``[0, 1]``, which
+    reaches one exactly at the three quarter threshold of McGhee and Frank (1968).
+    """
+    durations = stance_count_durations(parameters)
+    return sum(durations[_SUPPORT_MINIMUM:]) / parameters.period
