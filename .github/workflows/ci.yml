@@ -6,14 +6,29 @@ on:
   pull_request:
     branches: [main]
 
+# The workflow only ever reads the repository. Narrowing the token here means a
+# compromised dependency of any step cannot write to the repository, open a pull
+# request, or publish a package under this identity.
+permissions:
+  contents: read
+
+# A second push to the same branch makes the run already in flight irrelevant,
+# so it is cancelled rather than left to finish against a superseded commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: Python 3.12 on ${{ matrix.os }}
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        # The package declares requires-python >=3.12, so every version that
+        # declaration admits is tested rather than assumed.
+        python-version: ["3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v5
@@ -24,28 +39,33 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install 3.12
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --python ${{ matrix.python-version }} --all-extras --dev
 
       # The gate sits two points below the measured coverage, so an unrelated
       # change does not fail the build for shaving a fraction off the number,
       # while a real drop in tested behaviour still does.
       - name: Run tests
         run: >
-          uv run pytest -q
+          uv run --python ${{ matrix.python-version }} pytest -q
           --cov=src/quadruped_gait --cov-report=term-missing --cov-fail-under=96
 
       - name: Lint
-        run: uv run ruff check .
+        run: uv run --python ${{ matrix.python-version }} ruff check .
+
+      - name: Check formatting
+        run: uv run --python ${{ matrix.python-version }} ruff format --check .
 
       - name: Type check
-        run: uv run mypy
+        run: uv run --python ${{ matrix.python-version }} mypy
 
       # The committed figures are snapshots. This step checks that the command
       # documented in the README still runs and still writes them; it does not
       # compare the bytes, because Matplotlib output is not reproducible byte for
       # byte across platforms or font configurations.
       - name: Regenerate figures
-        run: uv run python examples/docs_figures.py --figure-dir "${{ runner.temp }}/figures"
+        run: >
+          uv run --python ${{ matrix.python-version }}
+          python examples/docs_figures.py --figure-dir "${{ runner.temp }}/figures"

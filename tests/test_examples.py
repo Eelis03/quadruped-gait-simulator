@@ -45,9 +45,7 @@ def test_every_example_is_covered() -> None:
 
 
 @pytest.mark.parametrize("name", sorted(EXAMPLE_ARGUMENTS))
-def test_example_runs_to_completion(
-    name: str, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_example_runs_to_completion(name: str, capsys: pytest.CaptureFixture[str]) -> None:
     module = _load(name)
     arguments: Sequence[str] = EXAMPLE_ARGUMENTS[name]
     assert module.main(arguments) == 0
@@ -67,7 +65,12 @@ def test_example_writes_figures(tmp_path: Path, capsys: pytest.CaptureFixture[st
     """The figure producing path of an example is exercised at least once."""
     module = _load("walk_stability")
     arguments = (
-        "--cycles", "1", "--samples-per-cycle", "24", "--figure-dir", str(tmp_path),
+        "--cycles",
+        "1",
+        "--samples-per-cycle",
+        "24",
+        "--figure-dir",
+        str(tmp_path),
     )
     assert module.main(arguments) == 0
     capsys.readouterr()
@@ -84,8 +87,14 @@ def test_published_figure_script_writes_the_documented_set(
     """The regeneration command writes exactly the three figures the README embeds."""
     module = _load("docs_figures")
     arguments = (
-        "--cycles", "1", "--samples-per-cycle", "12", "--dpi", "50",
-        "--figure-dir", str(tmp_path),
+        "--cycles",
+        "1",
+        "--samples-per-cycle",
+        "12",
+        "--dpi",
+        "50",
+        "--figure-dir",
+        str(tmp_path),
     )
     assert module.main(arguments) == 0
     capsys.readouterr()

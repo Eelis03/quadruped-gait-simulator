@@ -32,27 +32,21 @@ def rotation_x(angle: float) -> Matrix3:
     """Return the rotation matrix for ``angle`` radians about the x axis."""
     cos_a = math.cos(angle)
     sin_a = math.sin(angle)
-    return np.array(
-        [[1.0, 0.0, 0.0], [0.0, cos_a, -sin_a], [0.0, sin_a, cos_a]], dtype=np.float64
-    )
+    return np.array([[1.0, 0.0, 0.0], [0.0, cos_a, -sin_a], [0.0, sin_a, cos_a]], dtype=np.float64)
 
 
 def rotation_y(angle: float) -> Matrix3:
     """Return the rotation matrix for ``angle`` radians about the y axis."""
     cos_a = math.cos(angle)
     sin_a = math.sin(angle)
-    return np.array(
-        [[cos_a, 0.0, sin_a], [0.0, 1.0, 0.0], [-sin_a, 0.0, cos_a]], dtype=np.float64
-    )
+    return np.array([[cos_a, 0.0, sin_a], [0.0, 1.0, 0.0], [-sin_a, 0.0, cos_a]], dtype=np.float64)
 
 
 def rotation_z(angle: float) -> Matrix3:
     """Return the rotation matrix for ``angle`` radians about the z axis."""
     cos_a = math.cos(angle)
     sin_a = math.sin(angle)
-    return np.array(
-        [[cos_a, -sin_a, 0.0], [sin_a, cos_a, 0.0], [0.0, 0.0, 1.0]], dtype=np.float64
-    )
+    return np.array([[cos_a, -sin_a, 0.0], [sin_a, cos_a, 0.0], [0.0, 0.0, 1.0]], dtype=np.float64)
 
 
 def rotation_rpy(roll: float, pitch: float, yaw: float) -> Matrix3:
